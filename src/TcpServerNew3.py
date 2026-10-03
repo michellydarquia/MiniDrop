@@ -51,17 +51,44 @@ try:
 				resp = ('HTTP/1.0 200 OK\r\n' + 'Content-Type: text/html\r\n' + 'Content-Length: ' + str(len(homepage)) + '\r\n\r\n' + (homepage))
 				resp = str.encode(resp) # Até aqui resp era uma string Python. Só que o socket não envia uma string diretamente; ele trabalha com bytes. 
 				ws.sendall(resp) # envia a resposta através dessa conexão ws.
+			elif P[1] == b'/sobre':
+				# envia página sobre.html
+				body = '<html><body><h1>Sobre</h1><p>Projeto de servidor HTTP da disciplina de Redes de Computadores 1.</p></body></html>'
+				response = (
+					'HTTP/1.0 200 OK\r\n'
+					+ 'Content-Type: text/html\r\n'
+					+ 'Content-Length: ' + str(len(body.encode())) + '\r\n\r\n'
+					+ body
+				)
+
+				print(response)
+				ws.sendall(response.encode())
+				ws.close()
 			else:
 				ext = P[1].rpartition(b'.')[-1]
 				#print(ext, type(ext)) # b'jpg' <class 'bytes'>
 				ext = ext.decode()
-				#print(ext, type(ext)) # jpg <class 'str'>
-				f = open(P[1][1:], 'rb')
-				figure = f.read()
-				response = 'HTTP/1.01 200 OK\r\n' + 'Content-Type: image/' + ext + '\r\n' + 'Content-Length: ' + str(len(figure)) + '\r\n\r\n'
-				print(response)
-				ws.sendall(response.encode())
-				ws.sendall(figure)
+				try:
+					#print(ext, type(ext)) # jpg <class 'str'>
+					f = open(P[1][1:], 'rb')
+					figure = f.read()
+					response = 'HTTP/1.01 200 OK\r\n' + 'Content-Type: image/' + ext + '\r\n' + 'Content-Length: ' + str(len(figure)) + '\r\n\r\n'
+					print(response)
+					ws.sendall(response.encode())
+					ws.sendall(figure)
+				except FileNotFoundError:
+					body = '<html><body><h1>404 Not Found</h1></body></html>'
+					response = (
+						'HTTP/1.0 404 Not Found\r\n'
+						+ 'Content-Type: text/html\r\n'
+						+ 'Content-Length: ' + str(len(body.encode())) + '\r\n\r\n'
+						+ body
+					)
+					print(response)
+					ws.sendall(response.encode())
+					ws.close()
+
+					
 except KeyboardInterrupt:
 	print(" terminado pelo usuario")
 ws.close()
