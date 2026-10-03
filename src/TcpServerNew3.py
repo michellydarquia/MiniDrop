@@ -68,11 +68,30 @@ try:
 				ext = P[1].rpartition(b'.')[-1]
 				#print(ext, type(ext)) # b'jpg' <class 'bytes'>
 				ext = ext.decode()
+
+				if ext == 'html':
+					content_type = 'text/html'
+				elif ext == 'css':
+					content_type = 'text/css'
+				elif ext == 'txt':
+					content_type = 'text/plain'
+				elif ext == 'png':
+					content_type = 'image/png'
+				elif ext == 'jpg' or ext == 'jpeg':
+					content_type = 'image/jpeg'
+				else:
+					content_type = 'application/octet-stream'
+				
 				try:
 					#print(ext, type(ext)) # jpg <class 'str'>
 					f = open(P[1][1:], 'rb')
 					figure = f.read()
-					response = 'HTTP/1.01 200 OK\r\n' + 'Content-Type: image/' + ext + '\r\n' + 'Content-Length: ' + str(len(figure)) + '\r\n\r\n'
+					
+					response = (
+						'HTTP/1.0 200 OK\r\n'
+					  + 'Content-Type: ' + content_type + '\r\n'
+					  + 'Content-Length: ' + str(len(figure)) + '\r\n\r\n'
+					)					
 					print(response)
 					ws.sendall(response.encode())
 					ws.sendall(figure)
