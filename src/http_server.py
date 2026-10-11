@@ -2,12 +2,55 @@ import socket
 import os
 import json
 
+from urllib.parse import unquote
+
 from discovery import buscar_dispositivos
+from transfer import enviar_arquivo
 
 
 HOST = ""
 HTTP_PORT = 8080
 WEB_DIR = "web"
+TEMP_DIR = "temp"
+
+
+def receber_requisicao(conexao):
+    dados = b""
+
+    # primeiro recebe até terminar o cabeçalho HTTP
+    while b"\r\n\r\n" not in dados:
+        parte = conexao.recv(4096)
+
+        if not parte:
+            return None
+
+        dados += parte
+
+    cabecalho_bytes, corpo = dados.split(b"\r\n\r\n", 1)
+
+    linhas = cabecalho_bytes.decode().split("\r\n")
+
+    metodo, rota, versao = linhas[0].split(" ")
+
+    cabecalhos = {}
+
+    for linha in linhas[1:]:
+        if ":" in linha:
+            chave, valor = linha.split(":", 1)
+            cabecalhos[chave.strip().lower()] = valor.strip()
+
+    tamanho_corpo = int(cabecalhos.get("content-length", 0))
+
+    # caso o corpo ainda não tenha chegado inteiro
+    while len(corpo) < tamanho_corpo:
+        parte = conexao.recv(min(4096, tamanho_corpo - len(corpo)))
+
+        if not parte:
+            break
+
+        corpo += parte
+
+    return metodo, rota, cabecalhos, corpo
 
 
 def iniciar_http():
@@ -21,16 +64,13 @@ def iniciar_http():
     while True:
         conexao, endereco = servidor.accept()
 
-        requisicao = conexao.recv(2000)
+        requisicao = receber_requisicao(conexao)
 
         if not requisicao:
             conexao.close()
             continue
 
-        partes = requisicao.split(b" ")
-
-        metodo = partes[0].decode()
-        rota = partes[1].decode()
+        metodo, rota, cabecalhos, corpo = requisicao
 
         print(f"[HTTP] {metodo} {rota} - {endereco[0]}")
 
@@ -51,22 +91,24 @@ def iniciar_http():
                 tipo = "application/javascript"
 
             else:
-                resposta = (
+                corpo_resposta = b"Pagina nao encontrada"
+
+                cabecalho = (
                     "HTTP/1.1 404 Not Found\r\n"
                     "Content-Type: text/plain; charset=utf-8\r\n"
-                    "Content-Length: 19\r\n"
+                    f"Content-Length: {len(corpo_resposta)}\r\n"
                     "\r\n"
-                    "Pagina nao encontrada"
                 )
 
-                conexao.sendall(resposta.encode())
+                conexao.sendall(cabecalho.encode())
+                conexao.sendall(corpo_resposta)
+
                 conexao.close()
                 continue
 
 
             with open(caminho, "rb") as arquivo:
                 conteudo = arquivo.read()
-
 
             cabecalho = (
                 "HTTP/1.1 200 OK\r\n"
@@ -79,24 +121,72 @@ def iniciar_http():
             conexao.sendall(conteudo)
 
 
-        # POST /buscar - chama a descoberta UDP
+        # POST /buscar - descoberta UDP
         elif metodo == "POST" and rota == "/buscar":
 
             print("[HTTP] Solicitada busca de dispositivos.")
 
             dispositivos = buscar_dispositivos()
 
-            corpo = json.dumps(dispositivos).encode() ## de json para bytes
+            corpo_resposta = json.dumps(dispositivos).encode()
 
             cabecalho = (
                 "HTTP/1.1 200 OK\r\n"
                 "Content-Type: application/json; charset=utf-8\r\n"
-                f"Content-Length: {len(corpo)}\r\n"
+                f"Content-Length: {len(corpo_resposta)}\r\n"
                 "\r\n"
             )
 
             conexao.sendall(cabecalho.encode())
-            conexao.sendall(corpo)
+            conexao.sendall(corpo_resposta)
+
+
+        # POST /enviar - recebe arquivo do navegador e envia via TCP
+        elif metodo == "POST" and rota == "/enviar":
+
+            nome = unquote(cabecalhos["x-filename"])
+            nome = os.path.basename(nome)
+
+            ip_destino = cabecalhos["x-destination-ip"]
+            porta_destino = int(cabecalhos["x-destination-port"])
+
+            print(f"[HTTP] Arquivo recebido do navegador: {nome}")
+            print(f"[HTTP] Destino: {ip_destino}:{porta_destino}")
+
+            os.makedirs(TEMP_DIR, exist_ok=True)
+
+            caminho_temp = os.path.join(TEMP_DIR, nome)
+
+            with open(caminho_temp, "wb") as arquivo:
+                arquivo.write(corpo)
+
+            sucesso = enviar_arquivo(ip_destino, porta_destino, caminho_temp)
+
+            os.remove(caminho_temp)
+
+            if sucesso:
+                resposta = {
+                    "ok": True,
+                    "mensagem": "Arquivo enviado com sucesso."
+                }
+
+            else:
+                resposta = {
+                    "ok": False,
+                    "mensagem": "Erro ao enviar arquivo."
+                }
+
+            corpo_resposta = json.dumps(resposta).encode() # de json p bytes
+
+            cabecalho = (
+                "HTTP/1.1 200 OK\r\n"
+                "Content-Type: application/json; charset=utf-8\r\n"
+                f"Content-Length: {len(corpo_resposta)}\r\n"
+                "\r\n"
+            )
+
+            conexao.sendall(cabecalho.encode())
+            conexao.sendall(corpo_resposta)
 
 
         conexao.close()

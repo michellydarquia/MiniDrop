@@ -5,6 +5,18 @@ const arquivo = document.getElementById("arquivo");
 const nomeArquivo = document.getElementById("nome-arquivo");
 
 const botaoEnviar = document.getElementById("enviar");
+const statusDiv = document.getElementById("status");
+
+
+let dispositivosEncontrados = [];
+
+
+function atualizarBotaoEnviar() {
+
+    const destino = document.querySelector('input[name="destino"]:checked');
+
+    botaoEnviar.disabled = !(destino && arquivo.files.length > 0);
+}
 
 
 arquivo.addEventListener("change", function () {
@@ -13,6 +25,7 @@ arquivo.addEventListener("change", function () {
         nomeArquivo.textContent = arquivo.files[0].name;
     }
 
+    atualizarBotaoEnviar();
 });
 
 
@@ -24,16 +37,17 @@ botaoBuscar.addEventListener("click", async function () {
         method: "POST"
     });
 
-    const dispositivos = await resposta.json(); // transforma em estrutua javaschipt
+    dispositivosEncontrados = await resposta.json(); // transforma em estrutua javaschipt
 
     dispositivosDiv.innerHTML = "";
 
-    if (dispositivos.length == 0) {
+    if (dispositivosEncontrados.length == 0) {
         dispositivosDiv.innerHTML = '<div class="vazio">Nenhum dispositivo encontrado.</div>';
         return;
     }
 
-    dispositivos.forEach(function (dispositivo, indice) { // percorre cada disp e faz o card
+
+    dispositivosEncontrados.forEach(function (dispositivo, indice) {  // percorre cada disp e faz o card
 
         const item = document.createElement("label");
 
@@ -49,6 +63,53 @@ botaoBuscar.addEventListener("click", async function () {
         `;
 
         dispositivosDiv.appendChild(item);
+
+
+        const radio = item.querySelector("input");
+
+        radio.addEventListener("change", atualizarBotaoEnviar);
     });
+
+});
+
+
+botaoEnviar.addEventListener("click", async function () {
+
+    const destinoSelecionado = document.querySelector('input[name="destino"]:checked');
+
+    if (!destinoSelecionado || arquivo.files.length == 0) {
+        return;
+    }
+
+
+    const dispositivo = dispositivosEncontrados[destinoSelecionado.value];
+
+    const arquivoSelecionado = arquivo.files[0];
+
+
+    statusDiv.textContent = "Enviando arquivo...";
+
+    botaoEnviar.disabled = true;
+
+
+    const resposta = await fetch("/enviar", {
+        method: "POST",
+
+        headers: {
+            "Content-Type": "application/octet-stream",
+            "X-Filename": encodeURIComponent(arquivoSelecionado.name),
+            "X-Destination-IP": dispositivo.ip,
+            "X-Destination-Port": dispositivo.porta_tcp
+        },
+
+        body: arquivoSelecionado
+    });
+
+
+    const resultado = await resposta.json();
+
+    statusDiv.textContent = resultado.mensagem;
+
+    atualizarBotaoEnviar();
 
 });

@@ -178,12 +178,15 @@ def enviar_arquivo(ip,porta_tcp, caminho):
 
     if resultado == b"OK":
         print("[TCP] Transferência concluída e SHA-256 verificado.")
+        sucesso = True
+
 
     else:
         print("[TCP] O arquivo recebido apresentou erro de integridade.")
+        sucesso = False
 
     cliente.close()
-
+    return sucesso # o hppt precisa saber se o tcp terminou correto
 
 if __name__ == "__main__":
     modo = input("1 = receber arquivo | 2 = enviar arquivo: ")

@@ -3,14 +3,14 @@ import socket
 HOST = ""
 UDP_PORT = 5000
 
-NOME = "MiniDrop-PC"
+NOME = socket.gethostname()
 TCP_PORT = 5001
 
 # Durante teste no mesmo computador:
-BROADCAST_IP = "127.0.0.1"
+#BROADCAST_IP = "127.0.0.1"
 
 # PCs diferentes:
-#BROADCAST_IP = "255.255.255.255"
+BROADCAST_IP = "255.255.255.255"
 
 
 def responder_descoberta():
@@ -74,6 +74,9 @@ def buscar_dispositivos():
     busca_socket.close()
 
     return dispositivos
+
+
+
 
 
 if __name__ == "__main__":
